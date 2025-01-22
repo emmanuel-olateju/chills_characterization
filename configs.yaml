@@ -1,0 +1,52 @@
+DATASET_DIRECTORY: "drive/MyDrive/chills_dataset/"
+XDF_DIRECTORY: "drive/MyDrive/chills_dataset/raw_dataset"
+PREPROCESSED_DIRECTORY: "drive/MyDrive/chills_dataset/processed/preprocessed_data"
+FEATURES_DIRECTORY: "drive/MyDrive/chills_dataset/processed/features"
+CHILL_EVENTS_DIR: "drive/MyDrive/chills_dataset/processed/chill_events.sav"
+CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/chills_signal.sav"
+PRE_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/pre_chills_signal.sav"
+POST_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/post_chills_signal.sav"
+NON_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/non_chills_signal.sav"
+
+
+STIMULUS_FILENAME: "P005_Participant_Randomization - Sheet1.csv"
+
+LABELS:
+  - "ECG "
+  - "GSR"
+  - "ExGa 1"
+  - "Resp."
+
+TARGET_STREAM: "CGX AIM Phys. Mon. AIM-0106"
+
+STIMULUS_STREAMS:
+  - "AudioStart"
+
+RESTING_STREAMS:
+  - "RestingStateStart"
+
+MARKER_STREAMS: 
+  - "ChillsReport"
+
+TARGET_EVENTS:
+  AudioStart:
+    - "Stimulus 1 Started"
+    - "Stimulus 2 Started"
+    - "Stimulus 3 Started"
+  RestingStateStart: 
+    - "Pre-Intervention Resting State Started"
+    - "Post-Intervention Resting State Started"
+  ChillsReport:
+    - "Chills Reported"
+
+DURATIONS:
+  stimulus1: 300    # in seconds
+  stimulus2: 315
+  stimulus3: 273
+  resting_state: 300
+
+ECG_AMPLITUDE: 1500 # in mV
+ECG_BASELINEWANDERING: 1700 # in mV
+ECG_Z_THRESHOLD: 5
+
+TIME_WINDOW: 15
