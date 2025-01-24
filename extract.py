@@ -1,10 +1,14 @@
+import sys
 import math
 import numpy as np
+import pandas as pd
 import neurokit2 as nk
 from scipy import signal, integrate
 from scipy.interpolate import interp1d
 from scipy.fft import fft, fftfreq
 from scipy.stats import skew, kurtosis
+
+from functions import TIME_WINDOW
 
 def interpolate_peaks(peaks, time_duration, fs):
 
@@ -260,7 +264,7 @@ def extract_features(arr, fs):
     # --> Respiratory Rate Time Domain Features
     clean_resp = nk.rsp_clean(resp, sampling_rate=fs)
     clean_resp -= np.mean(clean_resp)
-    resp_rates = nk.rsp_rate(clean_resp, sampling_rate=fs, method="xcorr")
+    resp_rates = nk.rsp_rate(clean_resp, sampling_rate=fs, window=int(0.25*TIME_WINDOW), method="xcorr")
     mean_rr = np.mean(resp_rates)
 
     signal_std = np.std(clean_resp)
@@ -281,34 +285,49 @@ def extract_features(arr, fs):
         )
 
     # --> EDA features
-    eda = nk.eda_process(eda, sampling_rate=fs)[0]
-        # --> Statistical features: mean, median, std, skew, kurtosis
-    eda_stats = EDA_STATISTICS(np.array(eda["EDA_Raw"]))
-        # --> Tonic Parameters: Mean Skin Conductance Level
-    SCL = np.mean(eda["EDA_Tonic"])
-        # --> Phasic Skin Conductance Response Parameters
-    SCR = {}
-        #--> Amplitude
-    amplitude_indices = np.where(eda["SCR_Amplitude"]!=0)[0]
-    amplitudes = np.array(eda["SCR_Amplitude"][amplitude_indices])
-    SCR["amplitude_mean"] = amplitudes.mean()
-    SCR["amplitudes_std"] = amplitudes.std()
-        # --> Rise Time
-    rise_indices = np.where(eda["SCR_RiseTime"]!=0)[0]
-    rise_times = np.array(eda["SCR_RiseTime"][rise_indices])
-    SCR["risetime_mean"] = rise_times.mean()
-    SCR["risetime_std"] = rise_times.std()
-        # --> Recovery Time
-    recovery_times = np.where(eda["SCR_Recovery"]==1)[0]/fs
-    SCR["recovery_mean"] = recovery_times.mean()
-    SCR["recovery_std"] = recovery_times.std()
-        # --> Frequency
-    phasic_signal = np.array(eda["EDA_Phasic"])
-    n = len(phasic_signal)
-    frequencies = fftfreq(n, 1/fs)[:n//2]
-    fft_values = fft(phasic_signal)[:n//2]
-    frequencies = frequencies[:n//2]
-    SCR["domnt_freq"] = frequencies[np.argmax(fft_values)]
+    try:
+      eda = nk.eda_process(eda, sampling_rate=fs, method_phasic="highpass", method_peaks="neurokit")[0]
+          # --> Statistical features: mean, median, std, skew, kurtosis
+      eda_stats = EDA_STATISTICS(np.array(eda["EDA_Raw"]))
+          # --> Tonic Parameters: Mean Skin Conductance Level
+      SCL = np.mean(eda["EDA_Tonic"])
+          # --> Phasic Skin Conductance Response Parameters
+      SCR = {}
+          #--> Amplitude
+      amplitude_indices = np.where(eda["SCR_Amplitude"]!=0)[0]
+      amplitudes = np.array(eda["SCR_Amplitude"][amplitude_indices])
+      SCR["amplitude_mean"] = amplitudes.mean()
+      SCR["amplitudes_std"] = amplitudes.std()
+          # --> Rise Time
+      rise_indices = np.where(eda["SCR_RiseTime"]!=0)[0]
+      rise_times = np.array(eda["SCR_RiseTime"][rise_indices])
+      SCR["risetime_mean"] = rise_times.mean()
+      SCR["risetime_std"] = rise_times.std()
+          # --> Recovery Time
+      recovery_times = np.where(eda["SCR_Recovery"]==1)[0]/fs
+      SCR["recovery_mean"] = recovery_times.mean()
+      SCR["recovery_std"] = recovery_times.std()
+          # --> Frequency
+      phasic_signal = np.array(eda["EDA_Phasic"])
+      n = len(phasic_signal)
+      frequencies = fftfreq(n, 1/fs)[:n//2]
+      fft_values = fft(phasic_signal)[:n//2]
+      frequencies = frequencies[:n//2]
+      SCR["domnt_freq"] = frequencies[np.argmax(fft_values)]
+    except Exception as e:
+      eda_cleaned = nk.eda_clean(eda, sampling_rate=fs)
+      signals = pd.DataFrame({"EDA_Raw": eda, "EDA_Clean": eda_cleaned})
+      eda_stats = EDA_STATISTICS(eda)
+      eda_decomposed = nk.eda_phasic(eda_cleaned, sampling_rate=fs)
+      SCL = np.mean(eda_decomposed["EDA_Tonic"])
+
+      SCR = {}
+      SCR["amplitude_mean"] = math.nan
+      SCR["amplitudes_std"] = math.nan
+      SCR["risetime_mean"] = math.nan
+      SCR["risetime_std"] = math.nan
+      SCR["recovery_mean"] = math.nan
+      SCR["recovery_std"] = math.nan
 
     # --> ARRANGE INSTANCE FOR FEATURE DATASET
     instance = {}

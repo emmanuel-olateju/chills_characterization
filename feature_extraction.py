@@ -10,11 +10,8 @@ import pyxdf
 import neurokit2 as nk
 import joblib
 
-import importlib
 import functions as fnc
-importlib.reload(fnc)
 import sp as sp
-importlib.reload(sp)
 
 from functions import STIMULUS_FILENAME, XDF_DIR, TARGET_STREAM, STIMULUS_STREAMS, RESTING_STREAMS, MARKER_STREAMS, TARGET_EVENTS, LABELS, DURATIONS
 from functions import PREPROCESSED_DIR, FEATURES_DIR, DATASET_DIR, TIME_WINDOW 
@@ -25,6 +22,14 @@ from scipy.interpolate import interp1d
 from scipy.fft import fft, fftfreq
 from scipy.stats import skew, kurtosis
 from extract import *
+
+from IPython.display import clear_output
+import time
+
+import logging
+import warnings
+logging.basicConfig(level=logging.ERROR)
+warnings.filterwarnings("ignore")
 
 
 def main():
@@ -41,12 +46,14 @@ def main():
     subjects = os.listdir(XDF_DIR)
     subjects = [subject[:-4] for subject in subjects]
     # subjects = ["5006", "5011"]
+    # subjects = ["5022"]
 
     features_df = pd.DataFrame()
 
     for s, subject in enumerate(subjects):
 
         '''PREPROCECSSING OF SUBJECTS DATA'''
+        print(f"---------------------------------------------------------------SUBJECT: {subject} | {s}/{len(subjects)} ---------------------------------------------------------------------------------------------------------------------------------")
         subject_path = os.path.join(PREPROCESSED_DIR, f"{subject}_processed_data.sav")
         if os.path.exists(os.path.join(subject_path))!=True: # --> Enusre subject xdf file has not been preprocessed before
             print(f"{s+1}/{len(subjects)}: {subject}")
@@ -128,11 +135,11 @@ def main():
         subjects_with_chills = chill_events["subjects"]
         chill_events = chill_events["events"]
 
-        '''GET NON_CHILLS, PRE-CHILLS, AND CHILLS DATA'''
+        '''GET NON_CHILLS, PRE-CHILLS, POST-CHILLS, AND CHILLS DATA'''
         # --> PREDEFS
         subject_data = preprocessed_data
-        pre_chills_data = {phase: [] for phase in stimuli_phases}
-        post_chills_data = {phase: [] for phase in stimuli_phases}
+        # pre_chills_data = {phase: [] for phase in stimuli_phases}
+        # post_chills_data = {phase: [] for phase in stimuli_phases}
         chills_data = {phase: [] for phase in stimuli_phases}
         non_chills_data = {phase: [] for phase in rest_phases}
 
@@ -141,20 +148,20 @@ def main():
 
             # --> APPLY WINDOW TO CHILL EVENTS TO GET NON-OVERLAPPING CHILL REPORTS
             ts = subject_data["chills"]["ChillsReport"] #--> timestamps of all subject chill event reports
-            pre_time_window = post_time_window = TIME_WINDOW
+            time_window = TIME_WINDOW
             # around_time_window = TIME_WINDOW / 2
             consolidated_chills = [ts[0]]
             for t in ts[1:]:
-                if t - consolidated_chills[-1] > pre_time_window:
+                if t - consolidated_chills[-1] > time_window:
                     consolidated_chills.append(t)
             chills_ts = np.array(consolidated_chills)
             del consolidated_chills, ts
 
-            # --> GET PRE-CHILLS & CHILLS DATA FOR SUBJECT
+            # --> GET PRE-CHILLS, POST-CHILLS, & CHILLS DATA FOR SUBJECT
             for p, phase in enumerate(stimuli_phases):
                 if phase in subject_data:
-                    pre_chills_data[phase] = []
-                    post_chills_data[phase] = []
+                    # pre_chills_data[phase] = []
+                    # post_chills_data[phase] = []
                     chills_data[phase] = []
 
                     if (subjects_epochs_validity.loc[subject, (phase, "Same_Signal_Length")] is True) and \
@@ -178,56 +185,69 @@ def main():
                             # --> GET PRE-CHILL DATA
                             if len(idx_pre) != 0:
                                 sig_pre = signal[idx_pre, :]
-                                n_samples = int(fs*pre_time_window) # --> no of samples before chill report
+                                n_samples = int(fs*time_window) # --> no of samples before chill report
                                 if sig_pre[-n_samples:, :].shape[0] < n_samples: # --> Augment, if pre-chill data length less than n_samples
                                     print("---------------------------------------------------")
-                                    print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient pre_chills samples: {sig_pre[-n_samples:, :].shape[0]}<{n_samples}")
+                                    print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient samples prioir to chill report: {sig_pre[-n_samples:, :].shape[0]}<{n_samples}")
                                     print("---------------------------------------------------")
                                     aug_sig = np.median(sig_pre[-n_samples:, :], axis=0)    # --> median of each channel or signal
                                     aug_sig = np.tile(aug_sig, (n_samples-sig_pre[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
                                     aug_sig = np.vstack((aug_sig, sig_pre)) # --> Stack To Form New Signal
-                                    pre_chills_data[phase].append(aug_sig)
+                                    chills_data[phase].append(aug_sig)
                                     del aug_sig
                                 else:
-                                    pre_chills_data[phase].append(sig_pre[-n_samples:, :])
-                                    print(f"{subject} {phase} pre-chill events data extracted")
+                                    chills_data[phase].append(sig_pre[-n_samples:, :])
+                                    print(f"{subject} {phase} signals prior chill reports extracted")
+                                
+                                # if sig_pre[-n_samples:, :].shape[0] < n_samples: # --> Augment, if pre-chill data length less than n_samples
+                                #     print("---------------------------------------------------")
+                                #     print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient pre_chills samples: {sig_pre[-n_samples:, :].shape[0]}<{n_samples}")
+                                #     print("---------------------------------------------------")
+                                #     aug_sig = np.median(sig_pre[-n_samples:, :], axis=0)    # --> median of each channel or signal
+                                #     aug_sig = np.tile(aug_sig, (n_samples-sig_pre[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
+                                #     aug_sig = np.vstack((aug_sig, sig_pre)) # --> Stack To Form New Signal
+                                #     pre_chills_data[phase].append(aug_sig)
+                                #     del aug_sig
+                                # else:
+                                #     pre_chills_data[phase].append(sig_pre[-n_samples:, :])
+                                #     print(f"{subject} {phase} pre-chill events data extracted")
 
                                 # --> GET POST-CHILL DATA
-                                if len(idx_post) != 0:
-                                    sig_post = signal[idx_post, :]
-                                    n_samples = int(fs*post_time_window) # --> no of samples before and after chill report
-                                    temp_sig = np.vstack([
-                                            sig_pre[-n_samples//2:, :],
-                                            sig_post[:n_samples//2,:]
-                                        ])
+                                # if len(idx_post) != 0:
+                                #     sig_post = signal[idx_post, :]
+                                #     n_samples = int(fs*post_time_window) # --> no of samples before and after chill report
+                                #     temp_sig = np.vstack([
+                                #             sig_pre[-n_samples//2:, :],
+                                #             sig_post[:n_samples//2,:]
+                                #         ])
                                     
-                                    if temp_sig.shape[0] < n_samples: # --> Augment, if chill data length less than 2*n_samples
-                                        print("---------------------------------------------------")
-                                        print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient chills samples: {temp_sig.shape[0]}<{2*n_samples}")
-                                        print("---------------------------------------------------")
-                                        aug_sig = np.median(temp_sig, axis=0)   # --> median of each channel or signal
-                                        aug_sig = np.tile(aug_sig, (2*n_samples - temp_sig.shape[0], 1))    # --> fill missing samples with median of each signal
-                                        aug_sig = np.vstack((temp_sig, aug_sig))    # --> Stack To Form New Signal
-                                        chills_data[phase].append(aug_sig)
-                                        del aug_sig
-                                    else:
-                                        chills_data[phase].append(temp_sig)
-                                        print(f"{subject} {phase} chill events data extracted")
+                                #     if temp_sig.shape[0] < n_samples: # --> Augment, if chill data length less than 2*n_samples
+                                #         print("---------------------------------------------------")
+                                #         print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient chills samples: {temp_sig.shape[0]}<{2*n_samples}")
+                                #         print("---------------------------------------------------")
+                                #         aug_sig = np.median(temp_sig, axis=0)   # --> median of each channel or signal
+                                #         aug_sig = np.tile(aug_sig, (2*n_samples - temp_sig.shape[0], 1))    # --> fill missing samples with median of each signal
+                                #         aug_sig = np.vstack((temp_sig, aug_sig))    # --> Stack To Form New Signal
+                                #         chills_data[phase].append(aug_sig)
+                                #         del aug_sig
+                                #     else:
+                                #         chills_data[phase].append(temp_sig)
+                                #         print(f"{subject} {phase} chill events data extracted")
                                     
-                                    if sig_post[-n_samples:, :].shape[0] < n_samples: # --> Augment, if post-chill data length less than n_samples
-                                        print("---------------------------------------------------")
-                                        print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient post_chills samples: {sig_post[-n_samples:, :].shape[0]}<{n_samples}")
-                                        print("---------------------------------------------------")
-                                        aug_sig = np.median(sig_post[-n_samples:, :], axis=0)    # --> median of each channel or signal
-                                        aug_sig = np.tile(aug_sig, (n_samples-sig_post[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
-                                        aug_sig = np.vstack((aug_sig, sig_post)) # --> Stack To Form New Signal
-                                        post_chills_data[phase].append(aug_sig)
-                                        del aug_sig
-                                    else:
-                                        post_chills_data[phase].append(sig_post[-n_samples:, :])
-                                        print(f"{subject} {phase} post-chill events data extracted")
+                                    # if sig_post[-n_samples:, :].shape[0] < n_samples: # --> Augment, if post-chill data length less than n_samples
+                                    #     print("---------------------------------------------------")
+                                    #     print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient post_chills samples: {sig_post[-n_samples:, :].shape[0]}<{n_samples}")
+                                    #     print("---------------------------------------------------")
+                                    #     aug_sig = np.median(sig_post[-n_samples:, :], axis=0)    # --> median of each channel or signal
+                                    #     aug_sig = np.tile(aug_sig, (n_samples-sig_post[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
+                                    #     aug_sig = np.vstack((aug_sig, sig_post)) # --> Stack To Form New Signal
+                                    #     post_chills_data[phase].append(aug_sig)
+                                    #     del aug_sig
+                                    # else:
+                                    #     post_chills_data[phase].append(sig_post[-n_samples:, :])
+                                    #     print(f"{subject} {phase} post-chill events data extracted")
 
-                                    del temp_sig, sig_post
+                                    # del temp_sig, sig_post
                                 del sig_pre, n_samples, idx_pre, idx_post
                         del ecg, resp, emg, gsr, phase_ts, fs, signal
 
@@ -279,25 +299,25 @@ def main():
         '''EXTRACT FEATURES'''
         subject_features_df = pd.DataFrame()
         # --> PRE_CHILLS FEATURES
-        for p, phase in enumerate(pre_chills_data.keys()):
-            for a, arr in enumerate(pre_chills_data[phase]):
-                fs = arr.shape[0]/TIME_WINDOW
-                features = {}
-                features["id"] = f"{subject}_pre_{phases.index(phase)+1}_{a}"
-                features["stimuli"] = phase
-                features["label"] = "PRE-CHILL"
-                features.update(extract_features(arr, fs))
-                subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
+        # for p, phase in enumerate(pre_chills_data.keys()):
+        #     for a, arr in enumerate(pre_chills_data[phase]):
+        #         fs = arr.shape[0]/TIME_WINDOW
+        #         features = {}
+        #         features["id"] = f"{subject}_pre_{phases.index(phase)+1}_{a}"
+        #         features["stimuli"] = phase
+        #         features["label"] = "PRE-CHILL"
+        #         features.update(extract_features(arr, fs))
+        #         subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
         # --> POST_CHILLS FEATURES
-        for p, phase in enumerate(post_chills_data.keys()):
-            for a, arr in enumerate(post_chills_data[phase]):
-                fs = arr.shape[0]/TIME_WINDOW
-                features = {}
-                features["id"] = f"{subject}_post_{phases.index(phase)+1}_{a}"
-                features["stimuli"] = phase
-                features["label"] = "POST-CHILL"
-                features.update(extract_features(arr, fs))
-                subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
+        # for p, phase in enumerate(post_chills_data.keys()):
+        #     for a, arr in enumerate(post_chills_data[phase]):
+        #         fs = arr.shape[0]/TIME_WINDOW
+        #         features = {}
+        #         features["id"] = f"{subject}_post_{phases.index(phase)+1}_{a}"
+        #         features["stimuli"] = phase
+        #         features["label"] = "POST-CHILL"
+        #         features.update(extract_features(arr, fs))
+        #         subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
         # --> CHILLS FEATURES
         for p, phase in enumerate(chills_data.keys()):
             for a, arr in enumerate(chills_data[phase]):
@@ -335,14 +355,17 @@ def main():
                     subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
 
         features_df = pd.concat([features_df, subject_features_df], ignore_index=True)
-        extracted_data["PRE-CHILL"][subject] = pre_chills_data
-        extracted_data["POST-CHILL"][subject] = post_chills_data
+        # extracted_data["PRE-CHILL"][subject] = pre_chills_data
+        # extracted_data["POST-CHILL"][subject] = post_chills_data
         extracted_data["CHILL"][subject] = chills_data
         extracted_data["NON-CHILL"][subject] = non_chills_data
 
+        clear_output(wait=False)
+        # time.sleep(0.025)
+
     features_df.to_csv(f"{FEATURES_DIR}/all_features.csv")
-    joblib.dump(extracted_data["PRE-CHILL"], PRE_CHILLS_DATA_DIR)
-    joblib.dump(extracted_data["POST-CHILL"], POST_CHILLS_DATA_DIR)
+    # joblib.dump(extracted_data["PRE-CHILL"], PRE_CHILLS_DATA_DIR)
+    # joblib.dump(extracted_data["POST-CHILL"], POST_CHILLS_DATA_DIR)
     joblib.dump(extracted_data["CHILL"], CHILLS_DATA_DIR)
     joblib.dump(extracted_data["NON-CHILL"], NON_CHILLS_DATA_DIR)
 
