@@ -1,156 +1,273 @@
-# 1. Descriptive Statistics
+# A. Descriptive Statistics
 
-## A. Key Features Across Events (NON-CHILL, PRE-CHILL, POST-CHILL, CHILL)
+### ECG Features
 
-### Heart Rate & HRV Features:
-- `mean_HR`:
-  - [Mean & Median](./plots/features_mean_median.png):
-    - CHILL: Highest mean (~65-70 bpm) with larger difference between mean/median.
-    - Increasing trend through states from NON-CHILL to CHILL.
-  - [Violin Distribution](./plots/features_violin_box.png):
-    - Distribution with highest deviation: NON-CHILL.
-    - Progressive narrowing of distribution through states: from NON-CHILL to CHILL.
-    - Most compact distribution: CHILL.
-  - [Coefficient of Variation](./plots/coefficient_of_variation.png)
-    - Smaller coefficient of variation in PRE_CHILL and POST-CHILL (~0.15) compared to NON-CHILL (~0.18) and CHILL (>2.0).
+#### Normal or Symmetric Distributions
+- **Features:** `mean_HR`, `mean_NN`, `median_NN`
+- **Characteristics:**
+  - Mean and median are similar for each class indicating symmetric distributions.
+  - Mean/median slightly higher in `CHILL-OFFSET` for `mean_HR`.
+  - Mean/median slighty lower in `CHILL-OFFSET` FOR `mean_NN` and `median_NN`.
+  - Symmetric or approximately **normal distribution**.
+  - Multimodal like distribution for `CHILL-OFFSET` and `CHILL-ONSET` in `mean_HR`.
+  - Coefficient of variation (CV) is **less than 20%** for most.
+  - Significant outliers across classes, except
+  - Similar and significantly overlapping distributions across classes.
 
-- `HRV`:
-  - [Mean & Median](./plots/features_mean_median.png):
-    - Highest mean/median values in NON-CHILL (mean ~5) and CHILL (mean ~4.5).
-  - [Violin Distribution](./plots/features_violin_box.png):
-    - Fairly similar deviations across states.
-  - [Coefficient of Variation](./plots/coefficient_of_variation.png)
-    - Higher coefficnet of variation in PRE-CHILL and POST-CHILL (~1.75) comared to NON-CHILL and CHILL (1.3 - 1.5).
+#### Right-Skewed Distributions with Moderate Variability (CV > 20%)
+- **Features:** `HRV`, `std_NN`, `HR_RMSSD`, `HRV_HF`, `HRV_FF`, `ECG_SampEn`
+- **Characteristics:**
+  - Median is lower than the mean in each class for these variables, indicating **right skewness**; this is with the exception of `HRV_FF` and `ECG_SampEn` which is les dissimilar indicating a more **symmetric distribution**.
+  - Moderate to high coefficient of variation **(20% - 175%)**.
+  - Outliers in **right tail**.
+  - Significant overlap between distribution classes.
+  - `HRV`, `std_NN`, and `HR_RMSSD` have the **highest CV values (~100%-175%)**.
 
-- `Summary`
-  - `CHILL` `mean_HR` is skewed or has outliers - Larger difference in mean and median.
-  - Increase in `mean_HR` from `NON-CHILL` to `CHILL` suggest heightened heart activity as individuals transition to `CHILL` experience.
-  - `CHILL` `mean_HR` having the the narrowest distribution indicate more consistent physiological responses in `CHILL` states.
-  - Lower CV values in `PRE-CHILL` and `POST-CHILL` suggest relaively stable heart rate in these states.
-  - Highest mean and median HRV in  `NON-CHILL` and `CHILL` states suggest association with parasympathetic activity, reflecting more relaxed or engaged state.
-  - Consistent HRV distribution widths across states despite differences in mean/median values indicate deviation in HRV are comparable
-  - Higher `HRV` CV in `PRE-CHILL` and `POST-CHILL` suggests greater variability in HRV in these states.
+#### Strongly Right-Skewed Distributions with Extreme Outliers
+- **Features:** `SD1`, `SD2`, `SD1/SD2`, `ellipse-area`
+- **Characteristics:**
+  - Extremely right-skewed distributions.
+  - **Extreme outliers in the right tail** (especially `SD1/SD2` and `ellipse-area`).
+  - **Very high coefficient of variation (> 100%)**, indicating high variability.
+  - `SD1/SD2` has **extreme variability**, meaning the **median** is a better measure of central tendency.
 
-- `Observations ==> Inference`
-  - High `HRV` and wide `meanHR` ditribution in `NON-CHILL` indicates relaxed and varied state, reflecting baseline conditions or low engagement levels.
-  - Increased `meanHR`, compact `meanHR` distribution, and relatively high `HRV` point to increased increased arousal and engagement with relaively stable physiological patterns.
-  - Lower `meanHR` and `HRV` values with higher CV suggest transitional physiological states, marked by fluctuations in heart rate and variability.
+#### Multimodal Distributions
+- **Features:** `mean_HR`, `HRV_FF`
+- **Characteristics:**
+  - Distributions show **multiple peaks**.
+  - `HRV_FF` has **few outliers**, mostly in `NON-CHILL` and `CHILL-OFFSET`.
+  - `mean_HR` has **multimodal patterns** in `CHILLS_ONSET` and `CHILLS_OFFSET`.
+
+>#### Physiological Interpretation
+>- Increase in `mean_HR` from `NON-CHILL` to `CHILL-ONSET` to `CHILL-OFFSET` suggesting arousal or stmulation during chills. 
+>  - This is reversed in `mean_NN` and `median_NN`.
+>- Multimodal distributions indicate distinct respsonse patterns to musical stimuli or different type of chill experiences. Multimodal distributions observed in:
+>  - `mean_HR`: `CHILL-ONSET`, `CHILL-OFFSET`
+>  - `HRV_FF`: All phase.
+>- Decrease in `HRV` and `HR_RMSSD` from `NON-CHILL` to `CHILL-ONSET` to `CHILL-OFFSET`.
+>  - More stable cardiac activity/regulations during chills.
+>- Decreased `HR_RMSSD` variability during chills.
+>- Decrease of `mean_HR` variability during chills suggest more stable heart rates during chills.
+>- Slight fluctuation in `HRV` variability during `CHILLS-ONSET`.
+
+### Tips for Modelling
+>#### Feature Selection:
+>- `mean_HR`, `mean_NN`, and `median_NN` show promising stability.
+>- High variability features may need transformation.
+>- Consider removing or transforming `SD1/SD2` due to extreme outliers.
+>
+>#### Data Preprocessing:
+>- Robust scaling recommended for skewed features.
+>- Outlier treatment crucial for `SD1/SD2` and `HRV`.
+>- Consider log transformation for right-skewed features.
+>
+>#### Model Selection:
+>- High overlap suggests need for non-linear classifiers.
+>- Consider ensemble methods to handle different feature distributions.
+>- Robust models recommended due to outlier presence.
 
 
-### EDA (Electrodermal Activity) Features:
-- `EDA_mean`, `EDA_median`, and `EDA_SCL `:
-  - [Mean & Median](./plots/features_mean_median.png)
-    - Higher Mean/Median values in `PRE-CHILL` and `POST-CHILL` (>0.6) compared to `NON-CHILL` and `CHILL` (~0.6).
-  - [Violin](./plots/features_violin_box.png) & [Box Distributions](./plots/relevant_features_dist_box.png):
-    - `POST_CHILL` has most compact distribution(least deviation) with significant outliers.
-    - `POST-CHILL` and `PRE-CHILL` are significantly skewed compared to `CHILL` and `NON-CHILL`.
-  - [Coefficient of Variation](./plots/coefficient_of_variation.png)
-    - `POST-CHILL` has least CV value (~0.25) followed by `PRE-CHILL` (~0.45) similar to `NON-CHILL` whih is lightly higher, and `CHILL` the highest (>0.5).
+### Respiratory Features:
 
-- `Summary`
-  - EDA levels are generally more elevated in `PRE-CHILL` and `POST-CHILL`phases suggesting arousal during these periods.
-  - While majority of `POST-CHILL` observations are clustered around the central values, there are a few extreme cases.
-  - Skewness in `POST-CHILL` and `PRE-CHILL` compared to symmetrical `CHILL` and `NON-CHILL` suggests assymetrical response physiological arousal during the `PRE-CHILL` and `POST-CHILL` states.
-  - `POST-CHILL` having lowest CV indicates relatively stable `POST-CHILL` responses compared to `PRE-CHILL`, `NON-CHILL` and `CHILL` with highest CV.
-  - High variability in `CHILL` could suggest more diverse physiological responses or less consistent emotional statesduring this phase.
+#### Normal/Symmetric Distributions
+`mean_RR`, `RR_RMSSD`, `SDSD`
+- Variability:
+  - `mean_RR`: Low CV (16-17%)
+  - `RR_RMSSD`: Moderate CV (20-31%)
+  - `SDSD`: Higher CV (49-68%)
+- Outliers:
+  - `mean_RR`: Few outliers, mainly in left tail for `CHILLS-OFFSET`.
+  - `SDSD & RR_RMSSD`: Right tail outliers across classes.
+  - Similar mean and median indicating symmetric distribution.
+- Patterns:
+  - `mean_RR` shows slight elevation during chills (both onset and offset).
+  - High stability in base respiratory rate.
+  - Significant overlap between class distributions.
+- Classification Implications:
+  - `mean_RR` alone may not be discriminative enough.
+  - Stability measures might be more useful in combination.
+  - Consider interaction terms between these features.
 
-- `Observations ==> Inference`
-  - `PRE-CHILL` and `POST-CHILL` phases show elevated arousal, with `POST-CHILL` responses being most consistent and clustered around the mean.
-  - `CHILL` and `NON_CHILL` phases are associated with lower arousal levels and higher variability, suggesting less consistent/predictable physiological behaviour/engagement.
-  - The presence of skewness and outliers in `POST-CHILL` and `PRE-CHILL` may point to individual differences in how participants respond to these conditions, possibly due to externals factors or personal baselines.
+#### Right Skewed Distributions
+`RRV_HF`, `RRV_FF`, `SDBB`
+- Variability:
+  - Extremely high CV (>120%)
+  - `RRV_HF` shows highest variability (>500%)
+  - `SDBB`: Very high CV (200-233%)
+- Outliers:
+  - Significant right tail outliers across all conditions
+- Patterns:
+  - `RRV_FF`: Progressive increase from non-chills to offset
+  - `RRV_HF`: Highest in offset, lowest in onset
+  - `SDBB`: Decreased during onset, increased during offset
+- Classification Implications:
+  - Will need transformation for modeling
+  - Extreme values could be informative
+  - Consider using quantile-based features
 
+### Physiological Interpretations:
+>- Maintained basic respiratory control (stable `mean_RR`).
+>- Increased variability during chill episodes.
+>- Distinct recovery patterns in offset.
 
-### Phasic Features:
-- `phasic_recovery_mean`, and `phase_risetime_mean`:
-  - [Mean & Median](./plots/features_mean_median.png):
-    - `PRE-CHILL` and `POST-CHILL` have highes mean/medians.
-    - Mean and medians close, little to no skewness in `phasic_recovery_mean`, and `phase_risetime_mean`.
-  - [Violin](./plots/features_violin_box.png) & [Box Distributions](./plots/relevant_features_dist_box.png):
-    - `NON-CHILL` and `CHILL` most compact in `phasic_risetime_mean`, followed by
-    `POST-CHILL` and then `PRE-CHILL`
-    - Similar compactness of `phasic_recovery_mean` in `NON-CHILL`, `CHILL`, and `POST-CHILL`, but 
-    `PRE_CHILL` is still the least compact distribution.
-  - [Coefficient of Variation](./plots/coefficient_of_variation.png)
-    - CV values for `phasic_recovery_mean` generally lower than 
-    that of `phasic_risetime_mean`.
-    - CV for `phasic_recovery_mean`: `PRE-CHILL`, `CHILL` > `NON-CHILL` > `POST-CHILL`. 
-    - CV for `phasic_risetime_mean`: `NON-CHILL` > `CHILL` > `PRE-CHILL` > `POST-CHILL`. 
-    - In both `phasic_recovery_mean` and `phasic_risetime_mean`, `POST-CHILL` 
-    has the lowest CV.
+### Tips for Modelling
+>#### Feature Engineering Strategies
+>- Log transformation for skewed features.
+>- Consider rolling windows for variability measures.
+>- Ratio features between normal and skewed distributions.
+>- Quantile-based features for highly variable measures.
+>
+>#### Model Selection
+>- Need robust handling of outliers
+>- Non-linear relationships suggest tree-based methods.
+>- Consider ensemble methods to capture different feature characteristics.
+>
+>#### Class Separability
+>- Best separation potential:
+>   - `RRV_FF` between `NON-CHILL` and `CHILL-OFFSET`.
+>   - `SDBB` between `CHILL-ONSET` and `CHILL-OFFSET`.
+>   - `RRV_HF` for extreme responses.
+>- Challenging separation:
+>   - `mean_RR` between any conditions
+>   - Normal distribution features in general
+>
+>#### Recommendations
+>- Use feature combinations rather than individual measures
+>- Consider temporal sequences
+>- Include interaction terms
+>- Apply appropriate scaling/transformation for each distribution type
 
-- `Summary`
-  - Higher mean and median values during the PRE-CHILL and POST-CHILL 
-  phases indicates a higher baseline or magnitude in these phases 
-  compared to CHILL and NON-CHILL.
-  - The closeness of mean and median suggests minimal skewness in the 
-  data distribution, implying asymmetry.
-  - `phase_risetime_mean` variability increases in POST-CHILL, 
-  and even more so in PRE-CHILL, indicating broader data spread, 
-  or more diverse responses, and more variations in 
-  response time in these phases.
-  - `phasic_recovery_mean` PRE-CHILL stands out with a less 
-  compact (wider) distribution, pointing to higher 
-  variability in this phase and less consistency in other phases.
-  - `PRE-CHILL`: High mean and median but with less compact 
-  and more variable distributions, indicating a phase with 
-  diverse behaviors or responses.
-  - `CHILL`: Compact distributions for both metrics but with 
-  moderate variability (CV), suggesting some consistency 
-  but with a degree of fluctuation in responses.
-  - `NON-CHILL`: High variability in `phase_risetime_mean` indicates 
-  less predictable response times. Lower variability in 
-  `phasic_recovery_mean` suggests more stability in recovery 
-  responses.
-  - `POST-CHILL`: Shows the most consistent behavior 
-  overall (lowest CV for both metrics), with relatively 
-  high central tendencies, indicating stable and uniform 
-  responses.
+### EDA Features
 
-- `Observations ==> Inference`
-  - `POST-CHILL` is characterized by consistent and stable 
-  behavior across metrics.
-  - `PRE-CHILL` shows the highest variability, especially 
-  in `phasic_recovery_mea`n, pointing to diverse responses 
-  in this phase.
-  - `NON-CHILL` demonstrates variability, particularly in 
-  `phase_risetime_mean`, suggesting less predictable 
-  response times during this phase.
-  - `CHILL` shows moderate variability and compact 
-  distributions, reflecting relatively stable but slightly 
-  fluctuating responses.
+#### Normal/Symmetric Distributions
+`EDA_mean`, `EDA_median` 
+- Variability:
+  - Moderate CV (40-50%) for non-chills and onset  
+  - High CV (90-100%) for offset  
+- Outliers:
+  - Few outliers, mostly balanced between tails  
+- Patterns:
+  - Increase from `NON-CHILL` to `CHILL-ONSET` and significatn decrease in `CHILL-OFFSET`.
+  - `CHILL-ONSET` shows highest values (0.69-0.70)  
+  - `CHILL-OFFSET` shows marked decrease (0.32-0.35)  
+  - Strong overlap between `NON-CHILL` and `CHILL-ONSET`  distributions.
+- Classification Implications:
+  - Good discriminators for `CHILL-OFFSET`.
+  - Less useful for `NON-CHILL` vs `CHILL-ONSET` distinction.  
 
-## B. Outliers and Anomalies
+#### Right-Skewed Distributions
+`phasic_amplitude_mean`, `phasic_amplitudes_std`, `EDA_std`  
+- Variability:
+  - Very high CV (160-470%)  
+  - Highest variability in phasic measures  
+- Outliers:  
+  - Significant right-tail outliers across all conditions  
+- Patterns:
+  - `phasic_amplitude_mean` is highest in offset.  
+  - Increased variability during chills (both onset and offset)  
+  - Limited overlap between conditions in extreme values  
+- Classification Implications:
+  - May need transformation for modeling.
+  - Extreme values could be useful features.
+  - High variability suggests need for robust scaling.  
 
-### Notable Outliers:
-1. Heart Rate Metrics (Box plots in Image 4):
-   - `mean_HR`: Multiple outlier dots above 150 bpm
-   - `HR_RMSSD`: Numerous outlier points, especially in NON-CHILL
+#### Highly Skewed with Complex Patterns
+`EDA_skew`, `EDA_kurtosis`, `phasic_domnt_freq`  
+- Variability:
+  - Extremely high CV (>200%). 
+  - Most variable during offset.
+- Outliers:  
+  - Extreme outliers in both tails. 
+- Patterns:
+  - Complex, non-linear relationships between conditions.  
+  - Significant overlap in distributions.
+  - Higher moments (`EDA_skew`, `EDA_kurtosis`) show distinct patterns.  
+- Classification Implications:
+  - May require non-linear modeling approaches. 
+  - Potential for interaction features.  
+  - Could be useful for detecting extreme responses.  
 
-2. EDA Metrics:
-   - Box plots (Image 4) show:
-     - `EDA_kurtosis`: Extreme outlier dots >200
-     - `EDA_skew`: Symmetric outliers in both directions
-   - Double bar plots (Image 1) confirm asymmetry between mean and median
+### Physiological Interpretation:
+>- Clear arousal during onset.
+>- Distinct recovery pattern during offset.
+>- Individual differences in response magnitude. 
+>- Temporal dynamics could be important.
 
-3. Phasic Features:
-   - Box plots (Image 4) reveal:
-     - `phasic_risetime_mean`: Multiple outlier dots >10
-     - `phasic_domnt_freq`: Extreme outliers near 250
+### Tips On Modelling
+>#### Feature Engineering:
+>- Consider log-transformation for skewed features.  
+>- Potential for ratio features between normal and skewed measures.
+>- May benefit from rolling statistics (variance, range). 
+>
+>#### Model Selection:
+>- Need robust handling of outliers.  
+>- Models should account for high variability.
+>- Non-linear relationships suggest tree-based methods might work well.  
+>
+>#### Class Separability:
+>- Best separation for offset condition.  
+>- Onset vs non-chills more challenging.  
+>- Multiple features needed for reliable classification.  
 
-### Distribution Anomalies:
-1. Violin plots (Image 2) show:
-   - Right-skewed shapes:
-     - `HRV_LF`, `HRV_HF`: Bulbous bottom, thin upper tail
-     - `SDBB`, `SDSD`: Asymmetric violin shape
-   - Bimodal patterns:
-     - `CRC_coherence`: Double bulge in violin shape
-     - `EDA_mean`: Two distinct widening points
+---
 
-### Coefficient of Variation:
-- Single bar plots (Image 3) demonstrate:
-  - Highest bars in NON-CHILL across features
-  - Progressive decrease through states
-  - Shortest bars in CHILL for most metrics
-  - Notable exceptions in EDA features showing inverse pattern
+# B. Statistical Testing
+![Mutual Info & Anova F-test](../plots/feature_importance.png)
 
-This analysis leverages multiple visualization types (double bars, violin plots, box plots, and single bars) to provide comprehensive insights into the physiological state transitions across conditions.
+#### Mutual Information 
+***(Leftmost/First Plot left-to-right)***
+- Higher values indicate stronger statistical dependency between the feature and the class labels.
+- EDA features (`EDA_mean`, `EDA_median`, `EDA_SCL`) show relatively high mutual information.
+- Some ECG features (`ECG_SampEn`) also show moderate mutual information
+
+#### ANOVA F-test
+***The center-left plot shows F-statistic values***
+***The center-right plot sows p-values***
+- Tests the independence between features and class labels.
+- Higher values suggest stronger relationships.
+- Higher values indicate greater between-class variance compared to within-class variance
+- `EDA_SCL`, `EDA_mean`, and `EDA_median` show notably high F-statistic values, 
+this aligns with the MI scores.
+
+#### FDR (False Discovery Rate) Rejection of Null Hypitheis:
+***Rightmost plot***
+- Controls for multiple comparisons.
+- Boolean true bars indicate more statistically significant relationships.
+- Most features show significant relationships (high bars indicating low p-values).
+
+### Key implications:
+
+>#### Feature Importance:
+>- `EDA (electrodermal activity)` features appear to be the most discriminative for detecting chills.
+>- This suggests that `skin conductance changes` are more reliable indicators than heart-related measures
+`ECG features` show moderate but significant relationships.
+>
+>#### Statistical Significance:
+>- The low p-values values suggest these relationships are not due to chance.
+>- Multiple features show significant discriminative power.
+>- The consistency across different statistical tests strengthens the findings.
+>
+>#### Classification Potential:
+>- The strong statistical relationships suggest these features could be effective for automated chills detection.
+>- A combination of EDA and ECG features might provide the most robust classification.
+>- The varying importance of different features suggests a weighted feature approach might be beneficial.
+>- This analysis implies that physiological responses during musical chills are detectable and statistically distinct from non-chill periods, with skin conductance being particularly informative.
+
+---
+# C. Correlations
+![Correlation Matrix](../plots/relevant_features_corr.png)
+![Best Correlation Groups](../plots/highest_correlations.png)
+
+### Observations & Inference
+- Strong correlations between `HRV` features: (`HRV_LF, HRV_HF, SD1, SD2, RR_RMSSD`). Redundant features can be dropped to avoid overfitting.
+- EDA features (`EDA_mean, EDA_median, EDAD_SCL`), are stronlgy correlated. Also the `CHILL-OFFSET` distribution of these features is right-skewed opposed to that of other classes which is left-skewed; these can be useful in physiological states classification.
+- Strong negatiev correlation between `HRV` and `mean_HR` can be useful for classification of stress and relaxation states.
+
+### PCA on Correlated & Statistically Significant Features
+![](../plots/PCA_best_correlated_features.png)
+![](../plots/PCA_MCF_dist.png)
+![](../plots/PCA_SSF_features.png)
+![](../plots/PCA_SSF_dist.png)
+
+- Overlapping distributions confirm the need for non-linear classifiers.
+- 
