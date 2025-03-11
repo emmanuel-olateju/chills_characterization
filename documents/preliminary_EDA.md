@@ -270,4 +270,3 @@ this aligns with the MI scores.
 ![](../plots/PCA_SSF_dist.png)
 
 - Overlapping distributions confirm the need for non-linear classifiers.
-- 
