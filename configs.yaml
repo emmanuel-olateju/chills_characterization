@@ -28,6 +28,9 @@ RESTING_STREAMS:
 MARKER_STREAMS: 
   - "ChillsReport"
 
+FRISSON_MARKER_STREAMS:
+  - "FrissonStart"
+
 TARGET_EVENTS:
   AudioStart:
     - "Stimulus 1 Started"
@@ -38,6 +41,8 @@ TARGET_EVENTS:
     - "Post-Intervention Resting State Started"
   ChillsReport:
     - "Chills Reported"
+  FrissonStart:
+    - "Frisson Triggered"
 
 DURATIONS:
   stimulus1: 300    # in seconds
