@@ -15,7 +15,7 @@ import sp as sp
 
 from functions import STIMULUS_FILENAME, XDF_DIR, TARGET_STREAM, STIMULUS_STREAMS, RESTING_STREAMS, MARKER_STREAMS, FRISSON_MARKER_STREAMS, TARGET_EVENTS, LABELS, DURATIONS
 from functions import PREPROCESSED_DIR, FEATURES_DIR, DATASET_DIR 
-from functions import CHILL_EVENTS_DIR, CHILLS_DATA_DIR, NON_CHILLS_DATA_DIR
+from functions import CHILL_EVENTS_DIR, CHILLS_DATA_DIR, NON_CHILLS_DATA_DIR, FRISSON_CHILLS_DATA_DIR
 from functions import TIME_WINDOW, PLOT_TIME_WINDOW, CHILLS_REPORT_WINDOW
 
 from scipy import signal, integrate
@@ -37,7 +37,8 @@ def main():
 
     extracted_data = {
         "CHILL": {},
-        "NON-CHILL": {}
+        "NON-CHILL": {},
+        "FRISSON_CHILL": {}
     }    
 
     # --> Get Name of All subject xdf files
@@ -52,18 +53,13 @@ def main():
     for s, subject in enumerate(subjects):
 
         '''PREPROCECSSING OF SUBJECTS DATA'''
-        print(f"---------------------------------------------------------------SUBJECT: {subject} | {s}/{len(subjects)} ---------------------------------------------------------------------------------------------------------------------------------")
         subject_path = os.path.join(PREPROCESSED_DIR, f"{subject}_processed_data.sav")
         if os.path.exists(os.path.join(subject_path))!=True: # --> Enusre subject xdf file has not been preprocessed before
-            print(f"{s+1}/{len(subjects)}: {subject}")
-            print(f"-------------------------------------------------------------------")
-            
             # --> GET ORDER OF STIMULI SESSIONS
             stimulus_order = fnc.get_stimulus_order(subject, subjects_info)
             if not stimulus_order:  # -->  If no resting and musical stimuli sessions, skip
                 continue
-            print(f"Stimulus Order for subject {subject}: {stimulus_order}")
-            
+
             # --> LOAD XDF FILE
             xdf_file_path = os.path.join(XDF_DIR, f"{subject}.xdf")
             try:
@@ -80,12 +76,9 @@ def main():
             # --> GET MUSIC STIMULI/RESTING STATES ONSET
             stimulus_latencies = fnc.process_markers(streams, STIMULUS_STREAMS, TARGET_EVENTS)
             resting_latencies = fnc.process_markers(streams, RESTING_STREAMS, TARGET_EVENTS)
-            print(f"Stimulus latencies: {stimulus_latencies}")
-            print(f"Resting latencies: {resting_latencies}")
             for stream in STIMULUS_STREAMS:
                 stimulus_latencies_ordered = {i: stimulus_latencies[stream][stimulus_order.index(i)] for i in
                                                 stimulus_order}
-            print(f"Stimulus Latencies: {stimulus_latencies_ordered}")
 
             # --> EXTRACT DATA
             data, stream = fnc.extract_raw_data(streams, TARGET_STREAM, LABELS)
@@ -96,12 +89,11 @@ def main():
             timestamps = data["Timestamps"]
             effective_fs = sp.estimate_sampling_rate(timestamps)
             sampling_rate = int(np.round(effective_fs))
-            print(f"Sampling Rate: {sampling_rate}")
-
+            
+            # --> SAVE PREPROCESSED DATA
             if 'desc' in stream['info'] and 'channels' in stream['info']['desc'][0]:
                 channel_labels = stream['info']['desc'][0]['channels'][0]['channel']
                 channel_names = [ch['label'][0] for ch in channel_labels]
-                print("Channel names:", channel_names)
 
                 concatenated_data = fnc.extract_and_concatenate_data(
                     data, timestamps, sampling_rate, stimulus_latencies_ordered, resting_latencies, stimulus_order
@@ -123,20 +115,19 @@ def main():
                 continue
             preprocessed_data = joblib.load(subject_path)
 
-        '''FETCH SUBJECTS EPOCHS/PHASE VALIDITY DATAFRAME'''
-        subjects_epochs_validity = pd.read_pickle(os.path.join(DATASET_DIR, "Subject_Epochs_Validity.pkl"))
-
-        '''DEFINE PHASES'''
+        '''PREDEFS for EXTRACTING EVENTS DATA EPOCSH'''
+        subjects_epochs_validity = pd.read_pickle(os.path.join(DATASET_DIR, "Subject_Epochs_Validity.pkl")) # --> Load Subjects Epochs Validity DataFrame
+        # --> Define Phases
         phases = ['pre_rest', 'stimulus1', 'stimulus2', 'stimulus3', 'post_rest']
         stimuli_phases = phases[1:-1]
         rest_phases = ['pre_rest', 'post_rest']
-
-        '''FETCH CHILL_EVENTS INFO'''
+        # Fetch Chill Events
         chill_events = joblib.load(CHILL_EVENTS_DIR)
         subjects_with_chills = chill_events["subjects"]
         chill_events = chill_events["events"]
 
-        '''GET NON_CHILLS, PRE-CHILLS, POST-CHILLS, AND CHILLS DATA'''
+
+        '''GET EPOCHS of PRE- & POST-CHILL, NON-CHILL DATA'''
         # --> PREDEFS
         subject_data = preprocessed_data
         chills_data = {phase: [] for phase in stimuli_phases}
@@ -149,6 +140,8 @@ def main():
 
             # --> APPLY WINDOW TO CHILL EVENTS TO GET NON-OVERLAPPING CHILL REPORTS
             ts = subject_data["chills"]["ChillsReport"] #--> timestamps of all subject chill event reports
+            if len(ts)==0:
+                chills_ts = []
             consolidated_chills = [ts[0]]
             for t in ts[1:]:
                 if t - consolidated_chills[-1] > CHILLS_REPORT_WINDOW:
@@ -183,9 +176,11 @@ def main():
                         signal = np.stack([gsr, emg, resp, ecg], axis=1)
 
                         # --> EXTRACT SIGNAL OF DURATION TIME_WINDOW PRIOR TO CHILL EVENT, AND TIME_WINDOW//3 AROUND CHILL EVENT REPORT FOR SUBJECT-PHASE
-                        for ts_, _data in zip([chills_ts, frisson_ts], [chills_data, frisson_chills_data]):
+                        for auth_aug, ts_, _data in zip(["authentic", "augmented"], [chills_ts, frisson_ts], [chills_data, frisson_chills_data]):
                             sig = None
                             for ts in ts_:
+                                if auth_aug=="augmented" and ts in chills_ts:
+                                    continue
                                 idx_pre = np.where(phase_ts <= ts)[0]
                                 idx_post = np.where(phase_ts > ts)[0]
                                 n_samples = None
@@ -195,46 +190,62 @@ def main():
                                 if len(idx_pre) != 0:
                                     sig_pre = signal[idx_pre, :]
                                     n_samples = int(fs*time_window) # --> no of samples before chill report
-                                    if sig_pre[-n_samples:, :].shape[0] < n_samples: # --> Augment, if pre-chill data length less than n_samples
-                                        print("---------------------------------------------------")
-                                        print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient samples prioir to chill report: {sig_pre[-n_samples:, :].shape[0]}<{n_samples}")
-                                        print("---------------------------------------------------")
-                                        aug_sig = np.median(sig_pre[-n_samples:, :], axis=0)    # --> median of each channel or signal
-                                        aug_sig = np.tile(aug_sig, (n_samples-sig_pre[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
+                                    if sig_pre.shape[0] < n_samples: # --> Augment, if pre-chill data length less than n_samples
+                                        # print("---------------------------------------------------")
+                                        # print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient samples prioir to chill report: {sig_pre[-n_samples:, :].shape[0]}<{n_samples}")
+                                        # print("---------------------------------------------------")
+                                        aug_sig = np.median(sig_pre, axis=0)    # --> median of each channel or signal
+                                        aug_sig = np.tile(aug_sig, (n_samples-sig_pre.shape[0], 1)) # --> fill missing samples with median of each signal
                                         pre_chill = np.vstack((aug_sig, sig_pre)) # --> Stack To Form New Signal
-                                        print(f"{subject} {phase} chill onset signals extracted")
+                                        # print(f"{subject} {phase} chill onset signals extracted")
                                     else:
                                         pre_chill = sig_pre[-n_samples:, :]
-                                        print(f"{subject} {phase} chill onset signals sifficient & extracted")
+                                        # print(f"{subject} {phase} chill onset signals sifficient & extracted")
 
                                 # --> GET POST-CHILL DATA
                                 sig_post, aug_sig, post_chill = None, None, None
                                 if len(idx_post) != 0:
                                     sig_post = signal[idx_post, :]
                                     n_samples = int(fs*time_window) # --> no of samples before and after chill report
-                                    if sig_post[-n_samples:, :].shape[0] < n_samples: # --> Augment, if post-chill data length less than n_samples
-                                        print("---------------------------------------------------")
-                                        print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient post_chills samples: {sig_post[-n_samples:, :].shape[0]}<{n_samples}")
-                                        print("---------------------------------------------------")
-                                        aug_sig = np.median(sig_post[-n_samples:, :], axis=0)    # --> median of each channel or signal
-                                        aug_sig = np.tile(aug_sig, (n_samples-sig_post[-n_samples:, :].shape[0], 1)) # --> fill missing samples with median of each signal
+                                    if sig_post.shape[0] < n_samples: # --> Augment, if post-chill data length less than n_samples
+                                        # print("---------------------------------------------------")
+                                        # print(f"{subject} {phase} chills timestamps {np.where(chills_ts==ts)[0]} out of {len(chills_ts)} with insufficient post_chills samples: {sig_post[-n_samples:, :].shape[0]}<{n_samples}")
+                                        # print("---------------------------------------------------")
+                                        aug_sig = np.median(sig_post, axis=0)    # --> median of each channel or signal
+                                        aug_sig = np.tile(aug_sig, (n_samples-sig_post.shape[0], 1)) # --> fill missing samples with median of each signal
                                         post_chill = np.vstack((aug_sig, sig_post)) # --> Stack To Form New Signal
-                                        print(f"{subject} {phase} chill offset signal data extracted")
+                                        # print(f"{subject} {phase} chill offset signal data extracted")
                                     else:
                                         post_chill = sig_post[:n_samples, :]
-                                        print(f"{subject} {phase} chill offset signal data sufficient & extracted")
+                                        # print(f"{subject} {phase} chill offset signal data sufficient & extracted")
                                     
-                                if isinstance(pre_chill, np.ndarray) or isinstance(post_chill, np.ndarray):
-                                    _data[phase].append({"pre":pre_chill, "post":post_chill})
-                                del sig_pre, sig_post, pre_chill, post_chill, aug_sig, n_samples, idx_pre, idx_post
-                            del ecg, resp, emg, gsr, phase_ts, fs, signal
+                                new_sample = {}
+                                if (pre_chill is None) or (pre_chill.shape[0]<int(fs*time_window)):
+                                    pass
+                                    # print("pre-chill signal length issue", [auth_aug,"post-chill"])
+                                else:
+                                    new_sample["pre"] = pre_chill
+                                if (post_chill is None) or (post_chill.shape[0]<int(fs*time_window)):
+                                    pass
+                                    # print("post-chill signal length issue", [auth_aug,"post-chill"])
+                                else:
+                                    new_sample["post"] = post_chill
+
+                                if len(new_sample)==0:
+                                    pass
+                                else:
+                                    _data[phase].append(new_sample)
+                                    
+                                del sig_pre, sig_post, pre_chill, post_chill, aug_sig, n_samples, idx_pre, idx_post, new_sample
+                        del ecg, resp, emg, gsr, phase_ts, fs, signal
 
             # --> GET NON-CHILL DATA FOR SUBJECT WITH CHILL REPORT
             for p, phase in enumerate(rest_phases):
                 if phase in subject_data:
                     phase_ts = np.array(subject_data[phase]["df"]["Timestamp"])
                     if (np.any(chills_ts[:, None]<=phase_ts) and phase=="pre_rest") or (np.any(chills_ts[:, None]>=phase_ts) and phase=="post_rest"):
-                        print(f"{subject} {phase} has false positives, skipped")
+                        pass
+                        # print(f"{subject} {phase} has false positives, skipped")
                     else:
                         non_chills_data[phase] = []
                         if (subjects_epochs_validity.loc[subject, (phase, "Same_Signal_Length")] is True) and \
@@ -249,7 +260,7 @@ def main():
                             signal = np.stack([gsr, emg, resp, ecg], axis=1)
                             
                             non_chills_data[phase].append(signal)
-                            print(f"{subject} {phase} non-chills data extracted")
+                            # print(f"{subject} {phase} non-chills data extracted")
                             del ecg, resp, emg, gsr, fs, signal
         else:
             # --> GET NON-CHILL DATA FOR SUBJECT NOT HAVING A CHILL REPORT
@@ -269,7 +280,7 @@ def main():
                         signal = np.stack([gsr, emg, resp, ecg], axis=1)
                         
                         non_chills_data[phase].append(signal)
-                        print(f"{subject} {phase} non-chills data extracted")
+                        # print(f"{subject} {phase} non-chills data extracted")
                         del ecg, resp, emg, gsr, fs, signal
         
         del subject_data, preprocessed_data # --> Delete To Release Memory, CHILL, PRE-CHILL, & NON-CHILL data extracted already
@@ -282,6 +293,8 @@ def main():
         for p, phase in enumerate(chills_data.keys()):
             for e, epoch in enumerate(chills_data[phase]):
                 for desc in ["pre", "post"]:
+                    if desc not in epoch:
+                        continue
                     arr = epoch[desc]
                     if isinstance(arr, np.ndarray):
                         fs = arr.shape[0]/time_window
@@ -298,6 +311,9 @@ def main():
         for p, phase in enumerate(frisson_chills_data.keys()):
             for e, epoch in enumerate(frisson_chills_data[phase]):
                 for desc in ["pre", "post"]:
+                    if desc not in epoch:
+                        continue
+                    arr = epoch[desc]
                     if isinstance(arr, np.ndarray):
                         fs = arr.shape[0]/time_window
                         n_samples = int(fs*TIME_WINDOW)
@@ -306,8 +322,10 @@ def main():
                         features["id"] = f"{subject}_augmented_chill_{phases.index(phase)+1}_{e}_{onset_offset(desc)}"  
                         features["stimuli"] = phase
                         features["label"] = "AUGMENTED_CHILL_"+onset_offset(desc).upper()
+                        # print(fs)
                         features.update(extract_features(arr, fs))
                         subject_features_df = pd.concat([subject_features_df, pd.DataFrame([features])], ignore_index=True)
+                        # print(fs, "Frisson Data Chills Extracted")
         # --> NON_CHILLS FEATURES
         for p, phase in enumerate(non_chills_data.keys()):
             for d, data in enumerate(non_chills_data[phase]):
@@ -337,6 +355,7 @@ def main():
         features_df = pd.concat([features_df, subject_features_df], ignore_index=True)
         extracted_data["CHILL"][subject] = chills_data
         extracted_data["NON-CHILL"][subject] = non_chills_data
+        extracted_data["FRISSON_CHILL"][subject] = frisson_chills_data
 
         clear_output(wait=False)
         # time.sleep(0.025)
@@ -344,6 +363,7 @@ def main():
     features_df.to_csv(f"{FEATURES_DIR}/all_features.csv")
     joblib.dump(extracted_data["CHILL"], CHILLS_DATA_DIR)
     joblib.dump(extracted_data["NON-CHILL"], NON_CHILLS_DATA_DIR)
+    joblib.dump(extracted_data["FRISSON_CHILL"], FRISSON_CHILLS_DATA_DIR)
     print("Features extracted successfully")
 
 if __name__ == "__main__":

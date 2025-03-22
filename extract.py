@@ -151,6 +151,16 @@ def RRV_TIME(peaks, troughs, sampling_rate):
     }
 
 def RRV_FREQ(resp, peaks, troughs, sampling_rate, max_freq=2.0, freq_ranges={"LF":(0.0, 0.16), "HF":(0.16, 0.4)}):
+
+  if len(peaks==0) or len(troughs)==0:
+    results = {}
+    for band in freq_ranges:
+      results[band] = 0
+    results["FF"] = 0
+    results["frequencies"] = None
+    results["psd"] = None
+    return results
+  
   samples = np.concatenate([peaks, troughs])
   samples = np.sort(samples)
 
@@ -247,7 +257,11 @@ def extract_features(arr, fs):
     eda = arr[:, 0]
 
     # --> heart rate time-domain features
-    ecg_peaks, info = nk.ecg_peaks(ecg, fs, correct_artifacts=True)
+    # try:
+    smooth_window = min(len(ecg) // 10, float("inf")) / len(ecg)
+    while int(np.rint(smooth_window*fs)) < 1 or int(np.rint(smooth_window*fs))>len(ecg):
+      smooth_window = 1/fs
+    ecg_peaks, info = nk.ecg_peaks(ecg, fs, correct_artifacts=True, smoothwindow=smooth_window)
     heart_rates = nk.ecg_rate(ecg_peaks, fs)
     mean_hr = np.mean(heart_rates)
     hrv = np.std(heart_rates)
@@ -262,7 +276,7 @@ def extract_features(arr, fs):
     SampEn = nk.entropy_sample(ecg)[0]
 
     # --> Respiratory Rate Time Domain Features
-    clean_resp = nk.rsp_clean(resp, sampling_rate=fs)
+    clean_resp = nk.rsp_clean(resp, sampling_rate=fs, method="hampel")
     clean_resp -= np.mean(clean_resp)
     resp_rates = nk.rsp_rate(clean_resp, sampling_rate=fs, window=int(0.25*TIME_WINDOW), method="xcorr")
     mean_rr = np.mean(resp_rates)
