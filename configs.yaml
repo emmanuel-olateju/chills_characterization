@@ -57,4 +57,4 @@ ECG_Z_THRESHOLD: 5
 
 TIME_WINDOW: 6 # in seconds
 CHILLS_REPORT_WINDOW: 3 # in seconds
-PLOT_TIME_WINDOW: 15 # in seconds
+PLOT_TIME_WINDOW: 30 # in seconds
