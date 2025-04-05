@@ -7,7 +7,7 @@ CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/chills_signal.sav"
 PRE_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/pre_chills_signal.sav"
 POST_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/post_chills_signal.sav"
 NON_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/non_chills_signal.sav"
-FRISSON_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/frisson_chills_signal.sav"
+FRISSON_CHILLS_DATA_DIR: "drive/MyDrive/chills_dataset/processed/simulated_chills_signal.sav"
 
 
 STIMULUS_FILENAME: "P005_Participant_Randomization - Sheet1.csv"
